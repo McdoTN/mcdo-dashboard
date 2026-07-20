@@ -71,14 +71,21 @@ def statut_seuil_fixe(valeur, sens: str, seuil_vert: float) -> str:
         return "vert" if valeur >= seuil_vert else "rouge"
 
 
-def calculer_comparatif_n1(df: pd.DataFrame, colonne: str, mois_actuel: pd.Timestamp):
+def calculer_delta_n1(df: pd.DataFrame, colonne: str, mois_actuel: pd.Timestamp):
     """
-    Calcule l'évolution en % d'un KPI entre le mois donné et le même mois
-    de l'année précédente (N-1).
+    Calcule le delta entre le mois donné et le même mois de l'année
+    précédente (N-1), pour n'importe quel KPI numérique.
+
+    Utilisé de deux façons différentes selon le KPI :
+    - Pour CA/TAC : le "delta_pct" sert à déterminer le statut (comparatif N-1)
+    - Pour les KPI à seuil fixe (QCR, Pertes, etc.) : seul "delta_points"
+      est affiché à titre indicatif à côté du statut (qui vient du seuil,
+      pas de ce delta)
 
     Returns:
-        float (évolution en %) ou None si le mois N-1 n'est pas disponible
-        dans les données (historique insuffisant, cas normal en début de projet).
+        dict {"valeur_n1": ..., "delta_points": ..., "delta_pct": ...}
+        ou None si le mois N-1 n'est pas disponible (historique insuffisant,
+        cas normal en début de projet) ou si une des deux valeurs est manquante.
     """
     mois_n1 = mois_actuel - pd.DateOffset(years=1)
     ligne_n1 = df[df["Mois"] == mois_n1]
@@ -89,23 +96,32 @@ def calculer_comparatif_n1(df: pd.DataFrame, colonne: str, mois_actuel: pd.Times
     valeur_n1 = ligne_n1[colonne].values[0]
     valeur_actuelle = df.loc[df["Mois"] == mois_actuel, colonne].values[0]
 
-    if pd.isna(valeur_n1) or pd.isna(valeur_actuelle) or valeur_n1 == 0:
+    if pd.isna(valeur_n1) or pd.isna(valeur_actuelle):
         return None
 
-    return (valeur_actuelle - valeur_n1) / valeur_n1 * 100
+    delta_points = valeur_actuelle - valeur_n1
+    delta_pct = None
+    if valeur_n1 != 0:
+        delta_pct = (valeur_actuelle - valeur_n1) / valeur_n1 * 100
+
+    return {
+        "valeur_n1": valeur_n1,
+        "delta_points": delta_points,
+        "delta_pct": delta_pct,
+    }
 
 
-def statut_comparatif_n1(evolution) -> str:
+def statut_comparatif_n1(delta_pct) -> str:
     """
-    Détermine le statut pour un KPI en comparatif N-1.
+    Détermine le statut pour un KPI en comparatif N-1 (CA, TAC).
 
     Règle validée : vert si > 0% vs N-1, jaune si = 0%, rouge si < 0%.
     """
-    if evolution is None:
+    if delta_pct is None:
         return "non disponible"
-    if evolution > 0:
+    if delta_pct > 0:
         return "vert"
-    elif evolution == 0:
+    elif delta_pct == 0:
         return "jaune"
     else:
         return "rouge"
@@ -114,7 +130,8 @@ def statut_comparatif_n1(evolution) -> str:
 def calculer_kpi_business(df: pd.DataFrame = None) -> dict:
     """
     Calcule l'ensemble des KPI Business pour le mois le plus récent
-    disponible dans les données.
+    disponible dans les données. Alimente les cartes "KPI du mois"
+    du dashboard (statut + delta vs N-1).
 
     Args:
         df: DataFrame déjà chargé et nettoyé (optionnel). Si non fourni,
@@ -125,8 +142,12 @@ def calculer_kpi_business(df: pd.DataFrame = None) -> dict:
         {
             "mois": Timestamp du mois courant,
             "kpi": {
-                "CA": {"valeur": 25000, "evolution_n1": 3.2, "statut": "vert"},
-                "QCR": {"valeur": 19.5, "statut": "vert"},
+                # KPI à seuil fixe : statut vient du seuil, delta_n1 est indicatif
+                "QCR": {"valeur": 19.5, "statut": "vert",
+                        "valeur_n1": 20.1, "delta_n1_points": -0.6},
+                # KPI en comparatif N-1 : statut vient du delta lui-même
+                "CA": {"valeur": 25000, "valeur_n1": 24000,
+                       "evolution_n1_pct": 4.2, "statut": "vert"},
                 ...
             }
         }
@@ -139,21 +160,58 @@ def calculer_kpi_business(df: pd.DataFrame = None) -> dict:
 
     resultats = {}
 
-    # KPI à seuil fixe
+    # KPI à seuil fixe : le statut vient du seuil, le delta N-1 est
+    # seulement affiché à titre indicatif (comme sur la maquette)
     for colonne, (sens, seuil_vert) in SEUILS_FIXES.items():
         valeur = ligne_actuelle[colonne]
+        delta = calculer_delta_n1(df, colonne, mois_actuel)
         resultats[colonne] = {
             "valeur": valeur,
             "statut": statut_seuil_fixe(valeur, sens, seuil_vert),
+            "valeur_n1": delta["valeur_n1"] if delta else None,
+            "delta_n1_points": delta["delta_points"] if delta else None,
         }
 
-    # KPI en comparatif N-1
+    # KPI en comparatif N-1 (CA, TAC) : le statut vient du delta lui-même
     for colonne in COLONNES_COMPARATIF_N1:
-        evolution = calculer_comparatif_n1(df, colonne, mois_actuel)
+        delta = calculer_delta_n1(df, colonne, mois_actuel)
+        evolution_pct = delta["delta_pct"] if delta else None
         resultats[colonne] = {
             "valeur": ligne_actuelle[colonne],
-            "evolution_n1": evolution,
-            "statut": statut_comparatif_n1(evolution),
+            "valeur_n1": delta["valeur_n1"] if delta else None,
+            "evolution_n1_pct": evolution_pct,
+            "statut": statut_comparatif_n1(evolution_pct),
         }
 
     return {"mois": mois_actuel, "kpi": resultats}
+
+
+def calculer_serie_annuelle(df: pd.DataFrame, annee: int) -> pd.DataFrame:
+    """
+    Retourne, pour chaque mois archivé d'une année donnée, la valeur et
+    le statut de chaque KPI à seuil fixe. Sert de base commune :
+    - aux graphiques d'évolution (ex: barres Coût de la hub avec ligne
+      de seuil, courbe CA mensuel)
+    - au tableau récapitulatif annuel (une ligne par mois, badges colorés)
+
+    Args:
+        df: DataFrame déjà chargé et nettoyé (via charger_donnees_business())
+        annee: année à extraire, ex: 2025
+
+    Returns:
+        DataFrame filtré sur l'année demandée, trié par mois, avec une
+        colonne supplémentaire "<KPI>_statut" pour chaque KPI à seuil fixe.
+        Ne contient que les mois réellement archivés : un mois manquant
+        (comme "Jun —" sur la maquette) n'apparaîtra pas dans ce DataFrame
+        — c'est au dashboard de compléter l'affichage avec les mois
+        manquants si besoin (hors périmètre de ce script de calcul).
+    """
+    df_annee = df[df["Mois"].dt.year == annee].copy()
+    df_annee = df_annee.sort_values("Mois").reset_index(drop=True)
+
+    for colonne, (sens, seuil_vert) in SEUILS_FIXES.items():
+        df_annee[f"{colonne}_statut"] = df_annee[colonne].apply(
+            lambda valeur: statut_seuil_fixe(valeur, sens, seuil_vert)
+        )
+
+    return df_annee
