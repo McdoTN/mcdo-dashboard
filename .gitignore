@@ -216,3 +216,18 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Secrets Streamlit — JAMAIS commit
+.streamlit/secrets.toml
+
+# Credentials Google (si jamais un fichier JSON traîne en local)
+*.json
+!package.json
+
+# Données locales temporaires
+data/*
+!data/.gitkeep
+
+# Fichiers OS
+.DS_Store
+Thumbs.db
