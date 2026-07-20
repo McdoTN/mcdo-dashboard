@@ -164,3 +164,33 @@ def parse_code_bacterio(value: str) -> tuple[int, str] | None:
         return None  # format inattendu, à investiguer
 
     return int(nombre_str), lettre
+
+
+def parse_codes_bacterio(value: str) -> list[tuple[int, str]]:
+    """
+    Parse une cellule de prélèvement bactériologique pouvant contenir
+    AUCUN, UN SEUL, ou PLUSIEURS codes séparés par un espace
+    (ex: "3Z 1U" = 3 prélèvements satisfaisants + 1 non satisfaisant N1
+    dans la même cellule, pour le même item/mois).
+
+    Réutilise parse_code_bacterio() pour chaque code individuel.
+
+    Args:
+        value: chaîne brute issue du Sheet, ex: "1Z", "3Z 1U", ""
+
+    Returns:
+        Liste de tuples (nombre, lettre) — vide si la cellule est vide
+        (mois sans prélèvement pour cet item, cas normal) ou si aucun
+        code n'est reconnu. Les tokens non reconnus sont simplement
+        ignorés plutôt que de faire planter tout le traitement.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return []
+
+    resultats = []
+    for token in value.strip().split():
+        code_parse = parse_code_bacterio(token)
+        if code_parse is not None:
+            resultats.append(code_parse)
+
+    return resultats
