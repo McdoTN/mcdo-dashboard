@@ -8,7 +8,7 @@ les seuils validés avec Arnaud.
 
 import pandas as pd
 from src.gspread.connection import load_data_tab
-from src.kpi.utils import clean_numeric_columns, statut_tendance
+from src.kpi.utils import clean_numeric_columns, statut_tendance, statut_seuil_fixe, calculer_delta
 
 # Colonnes du pôle Business qui sont réellement numériques
 # (contrairement au pôle Qualité, ici toutes les colonnes hors "Mois" le sont)
@@ -50,64 +50,23 @@ def charger_donnees_business() -> pd.DataFrame:
     return df
 
 
-def statut_seuil_fixe(valeur, sens: str, seuil_vert: float) -> str:
-    """
-    Détermine le statut (vert/rouge/non disponible) pour un KPI à seuil fixe.
-
-    Args:
-        valeur: valeur du KPI pour le mois considéré (peut être NaN)
-        sens: "max" (vert si valeur <= seuil) ou "min" (vert si valeur >= seuil)
-        seuil_vert: seuil de référence
-
-    Returns:
-        "vert", "rouge", ou "non disponible" si la valeur est manquante
-    """
-    if pd.isna(valeur):
-        return "non disponible"
-
-    if sens == "max":
-        return "vert" if valeur <= seuil_vert else "rouge"
-    else:  # sens == "min"
-        return "vert" if valeur >= seuil_vert else "rouge"
-
-
 def calculer_delta_n1(df: pd.DataFrame, colonne: str, mois_actuel: pd.Timestamp):
     """
-    Calcule le delta entre le mois donné et le même mois de l'année
-    précédente (N-1), pour n'importe quel KPI numérique.
-
-    Utilisé de deux façons différentes selon le KPI :
-    - Pour CA/TAC : le "delta_pct" sert à déterminer le statut (comparatif N-1)
-    - Pour les KPI à seuil fixe (QCR, Pertes, etc.) : seul "delta_points"
-      est affiché à titre indicatif à côté du statut (qui vient du seuil,
-      pas de ce delta)
+    Calcule le delta N-1 (vs même mois année précédente) pour un KPI donné.
+    Fine couche au-dessus de calculer_delta() (utils.py) pour garder les
+    noms de clés historiques ("valeur_n1") utilisés ailleurs dans ce fichier.
 
     Returns:
         dict {"valeur_n1": ..., "delta_points": ..., "delta_pct": ...}
-        ou None si le mois N-1 n'est pas disponible (historique insuffisant,
-        cas normal en début de projet) ou si une des deux valeurs est manquante.
+        ou None si le mois N-1 n'est pas disponible.
     """
-    mois_n1 = mois_actuel - pd.DateOffset(years=1)
-    ligne_n1 = df[df["Mois"] == mois_n1]
-
-    if ligne_n1.empty:
-        return None  # pas encore assez d'historique pour comparer
-
-    valeur_n1 = ligne_n1[colonne].values[0]
-    valeur_actuelle = df.loc[df["Mois"] == mois_actuel, colonne].values[0]
-
-    if pd.isna(valeur_n1) or pd.isna(valeur_actuelle):
+    resultat = calculer_delta(df, colonne, mois_actuel, pd.DateOffset(years=1))
+    if resultat is None:
         return None
-
-    delta_points = valeur_actuelle - valeur_n1
-    delta_pct = None
-    if valeur_n1 != 0:
-        delta_pct = (valeur_actuelle - valeur_n1) / valeur_n1 * 100
-
     return {
-        "valeur_n1": valeur_n1,
-        "delta_points": delta_points,
-        "delta_pct": delta_pct,
+        "valeur_n1": resultat["valeur_reference"],
+        "delta_points": resultat["delta_points"],
+        "delta_pct": resultat["delta_pct"],
     }
 
 

@@ -41,6 +41,72 @@ def clean_numeric_columns(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return df
 
 
+def statut_seuil_fixe(valeur, sens: str, seuil_vert: float) -> str:
+    """
+    Détermine le statut (vert/rouge/non disponible) pour un KPI à seuil fixe.
+    Fonction générique, utilisée par tous les pôles (Business, Service, ...).
+
+    Args:
+        valeur: valeur du KPI pour le mois considéré (peut être NaN)
+        sens: "max" (vert si valeur <= seuil) ou "min" (vert si valeur >= seuil)
+        seuil_vert: seuil de référence
+
+    Returns:
+        "vert", "rouge", ou "non disponible" si la valeur est manquante
+    """
+    if pd.isna(valeur):
+        return "non disponible"
+
+    if sens == "max":
+        return "vert" if valeur <= seuil_vert else "rouge"
+    else:  # sens == "min"
+        return "vert" if valeur >= seuil_vert else "rouge"
+
+
+def calculer_delta(df: pd.DataFrame, colonne: str, mois_reference: pd.Timestamp, offset: pd.DateOffset):
+    """
+    Calcule le delta d'une colonne entre un mois de référence et un mois
+    antérieur défini par un offset. Fonction générique : le même code sert
+    aussi bien pour un comparatif N-1 (offset=pd.DateOffset(years=1)) que
+    pour un comparatif au mois précédent (offset=pd.DateOffset(months=1)),
+    utile par exemple pour "Nombre d'avis Google" qui se compare au mois
+    précédent plutôt qu'à N-1.
+
+    Args:
+        df: DataFrame contenant une colonne "Mois" et la colonne à comparer
+        colonne: nom de la colonne à comparer
+        mois_reference: mois "actuel", point de départ de la comparaison
+        offset: décalage vers le passé (pd.DateOffset(years=1), months=1, etc.)
+
+    Returns:
+        dict {"valeur_reference": ..., "delta_points": ..., "delta_pct": ...}
+        ou None si le mois comparé n'existe pas dans les données, ou si une
+        des deux valeurs est manquante.
+    """
+    mois_compare = mois_reference - offset
+    ligne_compare = df[df["Mois"] == mois_compare]
+
+    if ligne_compare.empty:
+        return None
+
+    valeur_reference = ligne_compare[colonne].values[0]
+    valeur_actuelle = df.loc[df["Mois"] == mois_reference, colonne].values[0]
+
+    if pd.isna(valeur_reference) or pd.isna(valeur_actuelle):
+        return None
+
+    delta_points = valeur_actuelle - valeur_reference
+    delta_pct = None
+    if valeur_reference != 0:
+        delta_pct = (valeur_actuelle - valeur_reference) / valeur_reference * 100
+
+    return {
+        "valeur_reference": valeur_reference,
+        "delta_points": delta_points,
+        "delta_pct": delta_pct,
+    }
+
+
 def statut_tendance(delta, sens: str) -> str:
     """
     Détermine si un delta (évolution d'un mois à l'autre, ou vs N-1)
