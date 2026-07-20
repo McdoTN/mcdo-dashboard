@@ -8,7 +8,7 @@ les seuils validés avec Arnaud.
 
 import pandas as pd
 from src.gspread.connection import load_data_tab
-from src.kpi.utils import clean_numeric_columns
+from src.kpi.utils import clean_numeric_columns, statut_tendance
 
 # Colonnes du pôle Business qui sont réellement numériques
 # (contrairement au pôle Qualité, ici toutes les colonnes hors "Mois" le sont)
@@ -165,11 +165,15 @@ def calculer_kpi_business(df: pd.DataFrame = None) -> dict:
     for colonne, (sens, seuil_vert) in SEUILS_FIXES.items():
         valeur = ligne_actuelle[colonne]
         delta = calculer_delta_n1(df, colonne, mois_actuel)
+        delta_points = delta["delta_points"] if delta else None
         resultats[colonne] = {
             "valeur": valeur,
             "statut": statut_seuil_fixe(valeur, sens, seuil_vert),
             "valeur_n1": delta["valeur_n1"] if delta else None,
-            "delta_n1_points": delta["delta_points"] if delta else None,
+            "delta_n1_points": delta_points,
+            # Couleur de la flèche de delta (différent du statut vs seuil !) :
+            # ex: QCR qui augmente est rouge même si encore "dans l'objectif"
+            "tendance_n1": statut_tendance(delta_points, sens),
         }
 
     # KPI en comparatif N-1 (CA, TAC) : le statut vient du delta lui-même
