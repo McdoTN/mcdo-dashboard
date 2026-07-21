@@ -86,20 +86,22 @@ def statut_comparatif_n1(delta_pct) -> str:
         return "rouge"
 
 
-def calculer_kpi_business(df: pd.DataFrame = None) -> dict:
+def calculer_kpi_business(df: pd.DataFrame = None, mois: pd.Timestamp = None) -> dict:
     """
-    Calcule l'ensemble des KPI Business pour le mois le plus récent
-    disponible dans les données. Alimente les cartes "KPI du mois"
-    du dashboard (statut + delta vs N-1).
+    Calcule l'ensemble des KPI Business pour un mois donné. Alimente les
+    cartes "KPI du mois" du dashboard (statut + delta vs N-1).
 
     Args:
         df: DataFrame déjà chargé et nettoyé (optionnel). Si non fourni,
             charge et nettoie les données automatiquement.
+        mois: mois à afficher (optionnel). Si non fourni, utilise le mois
+            le plus récent disponible dans les données — comportement
+            historique, conservé par défaut pour ne rien casser ailleurs.
 
     Returns:
         dict structuré ainsi :
         {
-            "mois": Timestamp du mois courant,
+            "mois": Timestamp du mois demandé (ou le plus récent par défaut),
             "kpi": {
                 # KPI à seuil fixe : statut vient du seuil, delta_n1 est indicatif
                 "QCR": {"valeur": 19.5, "statut": "vert",
@@ -114,7 +116,7 @@ def calculer_kpi_business(df: pd.DataFrame = None) -> dict:
     if df is None:
         df = charger_donnees_business()
 
-    mois_actuel = df["Mois"].max()
+    mois_actuel = mois if mois is not None else df["Mois"].max()
     ligne_actuelle = df[df["Mois"] == mois_actuel].iloc[0]
 
     resultats = {}
