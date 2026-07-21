@@ -35,8 +35,7 @@ SEUILS_FIXES = {
 COLONNES_MIX_CANAUX = ["% Comptoir", "% Drive", "% LAD", "% Click & Collect"]
 
 # Nombre d'avis Google : suivi simple, comparé au MOIS PRÉCÉDENT
-# (pas à N-1 comme les autres KPI — un volume d'avis se suit au fil de
-# l'eau plutôt qu'en saisonnalité annuelle)
+# (pas à N-1 comme les autres KPI)
 COLONNE_AVIS_GOOGLE = "Nombre d'avis Google"
 
 
@@ -50,26 +49,30 @@ def charger_donnees_service() -> pd.DataFrame:
     return df
 
 
-def calculer_kpi_service(df: pd.DataFrame = None) -> dict:
+def calculer_kpi_service(df: pd.DataFrame = None, mois: pd.Timestamp = None) -> dict:
     """
-    Calcule l'ensemble des KPI Service pour le mois le plus récent
-    disponible dans les données.
+    Calcule l'ensemble des KPI Service pour un mois donné.
+
+    Args:
+        df: DataFrame déjà chargé et nettoyé (optionnel).
+        mois: mois à afficher (optionnel). Si non fourni, utilise le mois
+            le plus récent disponible — comportement historique, conservé
+            par défaut pour ne rien casser ailleurs.
 
     Returns:
         dict structuré ainsi :
         {
-            "mois": Timestamp du mois courant,
+            "mois": Timestamp du mois demandé (ou le plus récent par défaut),
             "kpi": {
                 "Temps de service R2P comptoir": {
                     "valeur": 274, "statut": "vert",
                     "valeur_n1": 286, "delta_n1_points": -12,
-                    "tendance_n1": "vert"  # baisse = bonne nouvelle
+                    "tendance_n1": "vert"
                 },
                 ...
                 "Nombre d'avis Google": {
                     "valeur": 47, "valeur_mois_precedent": 43,
                     "delta_mois_precedent": 4
-                    # pas de "statut" : suivi simple, pas de seuil
                 },
             },
             "mix_canaux": {
@@ -80,12 +83,12 @@ def calculer_kpi_service(df: pd.DataFrame = None) -> dict:
     if df is None:
         df = charger_donnees_service()
 
-    mois_actuel = df["Mois"].max()
+    mois_actuel = mois if mois is not None else df["Mois"].max()
     ligne_actuelle = df[df["Mois"] == mois_actuel].iloc[0]
 
     resultats = {}
 
-    # KPI à seuil fixe, avec delta N-1 et tendance (comme le pôle Business)
+    # KPI à seuil fixe, avec delta N-1 et tendance
     for colonne, (sens, seuil_vert) in SEUILS_FIXES.items():
         valeur = ligne_actuelle[colonne]
         delta = calculer_delta(df, colonne, mois_actuel, pd.DateOffset(years=1))
@@ -118,17 +121,7 @@ def calculer_serie_annuelle(df: pd.DataFrame, annee: int) -> pd.DataFrame:
     """
     Retourne, pour chaque mois archivé d'une année donnée, la valeur et
     le statut de chaque KPI à seuil fixe. Alimente les graphiques
-    d'évolution (ex: barres Anniversaires colorées par mois, ligne
-    Rapport balance avec seuil) et le tableau récapitulatif annuel.
-
-    Args:
-        df: DataFrame déjà chargé et nettoyé (via charger_donnees_service())
-        annee: année à extraire, ex: 2026
-
-    Returns:
-        DataFrame filtré sur l'année, trié par mois, avec une colonne
-        "<KPI>_statut" par KPI à seuil fixe. N'inclut pas les colonnes
-        de mix canaux ni le nombre d'avis Google (pas de statut associé).
+    d'évolution et le tableau récapitulatif annuel.
     """
     df_annee = df[df["Mois"].dt.year == annee].copy()
     df_annee = df_annee.sort_values("Mois").reset_index(drop=True)

@@ -16,6 +16,29 @@ COULEUR_CARTE_BORDURE = "#323238"
 COULEUR_TEXTE = "#e4e4e7"
 COULEUR_TEXTE_SECONDAIRE = "#a1a1aa"
 
+# Mois en français, réutilisables sur toutes les pages (sélecteur de mois,
+# axes des graphiques, tableaux récap) — évite de les redéfinir à chaque fois
+MOIS_FR = [
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+]
+MOIS_ABREGE_FR = [
+    "Jan", "Fév", "Mar", "Avr", "Mai", "Juin",
+    "Juil", "Août", "Sep", "Oct", "Nov", "Déc",
+]
+
+
+def formater_mois(ts) -> str:
+    """Formate un Timestamp en 'Mois Année' français (ex: 'Juillet 2026')."""
+    return f"{MOIS_FR[ts.month - 1]} {ts.year}"
+
+
+def formater_mois_n1(mois_actuel) -> str:
+    """Formate le mois N-1 en minuscules pour l'affichage dans les deltas (ex: 'mai 2024')."""
+    import pandas as pd
+    mois_n1 = mois_actuel - pd.DateOffset(years=1)
+    return f"{MOIS_FR[mois_n1.month - 1].lower()} {mois_n1.year}"
+
 # Couleurs des BADGES (pill "Objectif : ..." et cellules du tableau récap) : fond pastel + texte foncé
 COULEURS_STATUT = {
     "vert": {"bg": "#eaf3de", "texte": "#2b530e"},

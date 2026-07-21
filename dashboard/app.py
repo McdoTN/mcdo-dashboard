@@ -42,6 +42,7 @@ else:
         [
             st.Page("pages/0_Accueil.py", title="Accueil", icon=":material/dashboard:", default=True),
             st.Page("pages/1_Business.py", title="Business", icon=":material/money_bag:"),
+            st.Page("pages/2_Service.py", title="Service", icon=":material/schedule:"),
         ],
         position="hidden",
     )

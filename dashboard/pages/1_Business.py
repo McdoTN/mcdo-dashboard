@@ -150,11 +150,10 @@ for debut in range(0, len(noms_couts), 3):
                 texte_seuil(nom), d["statut"],
             )
 
-st.markdown("---")
-
 # --- GRAPHIQUES D'ÉVOLUTION ---
 annee_courante = mois_actuel.year
 section_eyebrow(f"Évolution — Ventes — Année {annee_courante}")
+st.markdown(f'<hr style="margin:4px 0 20px 0; border-color:{COULEUR_CARTE_BORDURE};">', unsafe_allow_html=True)
 
 serie_actuelle = calculer_serie_annuelle(df, annee_courante)
 serie_precedente = calculer_serie_annuelle(df, annee_courante - 1)
@@ -247,10 +246,9 @@ with col2:
         use_container_width=True, config={"displayModeBar": False},
     )
 
-st.markdown("---")
-
 # --- TABLEAU RÉCAPITULATIF ANNUEL ---
 section_eyebrow(f"Récapitulatif — Année {annee_courante}")
+st.markdown(f'<hr style="margin:4px 0 20px 0; border-color:{COULEUR_CARTE_BORDURE};">', unsafe_allow_html=True)
 
 colonnes_recap = ["CA", "TAC", "Marge P&L", "Marge TH", "QCR", "Pertes", "Écart de rendement", "Bulk", "Repas employés", "Taux de remboursement"]
 
