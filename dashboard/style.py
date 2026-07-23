@@ -7,6 +7,7 @@ de façon cohérente sur toutes les pages du dashboard.
 """
 
 import streamlit as st
+import pandas as pd
 
 # Palette extraite de la maquette
 COULEUR_FOND = "#141413"
@@ -35,7 +36,6 @@ def formater_mois(ts) -> str:
 
 def formater_mois_n1(mois_actuel) -> str:
     """Formate le mois N-1 en minuscules pour l'affichage dans les deltas (ex: 'mai 2024')."""
-    import pandas as pd
     mois_n1 = mois_actuel - pd.DateOffset(years=1)
     return f"{MOIS_FR[mois_n1.month - 1].lower()} {mois_n1.year}"
 
@@ -181,6 +181,50 @@ def appliquer_style():
 def titre_page(texte: str):
     """Titre principal de la page (ex: "Business"), plus compact que st.title()."""
     st.markdown(f'<div class="page-titre">{texte}</div>', unsafe_allow_html=True)
+
+
+def selecteur_mois(df, titre: str):
+    """
+    Affiche la ligne titre de page + sélecteur de mois, et retourne le
+    Timestamp du mois choisi.
+
+    Le mois sélectionné est mémorisé dans st.session_state (clé partagée
+    entre TOUTES les pages) : si on choisit "Avril 2026" sur Business puis
+    qu'on bascule sur Service ou RH, le sélecteur repart sur "Avril 2026"
+    au lieu de revenir sur le mois le plus récent à chaque changement de
+    page — comportement attendu, demandé par Bastien.
+
+    Si le mois mémorisé n'existe pas dans les données de la page actuelle
+    (ex: historique plus court sur un pôle que sur un autre), on retombe
+    silencieusement sur le mois le plus récent disponible ICI.
+
+    Args:
+        df: DataFrame de la page (doit avoir une colonne "Mois")
+        titre: titre de la page (ex: "Ressources humaines")
+
+    Returns:
+        Timestamp du mois sélectionné
+    """
+    mois_disponibles = sorted(df["Mois"].dropna().unique(), reverse=True)
+    mois_disponibles = [pd.Timestamp(m) for m in mois_disponibles]
+    options_mois = {formater_mois(m): m for m in mois_disponibles}
+
+    mois_memorise = st.session_state.get("mois_selectionne_global")
+    mois_par_defaut = mois_memorise if mois_memorise in mois_disponibles else mois_disponibles[0]
+    index_par_defaut = mois_disponibles.index(mois_par_defaut)
+
+    col_titre, col_selecteur = st.columns([5, 1])
+    with col_titre:
+        titre_page(titre)
+    with col_selecteur:
+        st.write("")  # petit espace pour aligner verticalement avec le titre
+        mois_choisi_label = st.selectbox(
+            "Mois", options=list(options_mois.keys()), index=index_par_defaut,
+            label_visibility="collapsed",
+        )
+    mois_selectionne = options_mois[mois_choisi_label]
+    st.session_state["mois_selectionne_global"] = mois_selectionne
+    return mois_selectionne
 
 
 def section_eyebrow(texte: str):

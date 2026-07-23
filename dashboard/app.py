@@ -36,13 +36,14 @@ if not st.session_state.get("authentifie", False):
     pg = st.navigation([st.Page(page_connexion, title="Connexion")], position="hidden")
 else:
     # Connecté : la vraie liste de pages apparaît. Les futures pages
-    # (Service, RH, Polyvalence, Qualité) viendront s'ajouter ici au fur
-    # et à mesure qu'on les construira.
+    # (Polyvalence, Qualité) viendront s'ajouter ici au fur et à mesure
+    # qu'on les construira.
     pg = st.navigation(
         [
             st.Page("pages/0_Accueil.py", title="Accueil", icon=":material/dashboard:", default=True),
             st.Page("pages/1_Business.py", title="Business", icon=":material/money_bag:"),
             st.Page("pages/2_Service.py", title="Service", icon=":material/schedule:"),
+            st.Page("pages/3_RH.py", title="RH", icon=":material/group:"),
         ],
         position="hidden",
     )

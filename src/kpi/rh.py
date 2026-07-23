@@ -41,14 +41,20 @@ def charger_donnees_rh() -> pd.DataFrame:
     return df
 
 
-def calculer_kpi_rh(df: pd.DataFrame = None) -> dict:
+def calculer_kpi_rh(df: pd.DataFrame = None, mois: pd.Timestamp = None) -> dict:
     """
-    Calcule l'ensemble des KPI RH pour le mois le plus récent disponible.
+    Calcule l'ensemble des KPI RH pour un mois donné (ou, par défaut, pour
+    le mois le plus récent disponible — comportement d'origine inchangé).
+
+    Args:
+        df: DataFrame source (si None, rechargé automatiquement)
+        mois: mois à calculer (ex: valeur issue du sélecteur de mois de la
+            page) ; si None, utilise le mois le plus récent disponible
 
     Returns:
         dict structuré ainsi :
         {
-            "mois": Timestamp du mois courant,
+            "mois": Timestamp du mois calculé,
             "kpi": {
                 "MO FDC": {"valeur": 8.7, "statut": "vert",
                            "valeur_n1": None, "delta_n1_points": None,
@@ -63,7 +69,7 @@ def calculer_kpi_rh(df: pd.DataFrame = None) -> dict:
     if df is None:
         df = charger_donnees_rh()
 
-    mois_actuel = df["Mois"].max()
+    mois_actuel = mois if mois is not None else df["Mois"].max()
     ligne_actuelle = df[df["Mois"] == mois_actuel].iloc[0]
 
     resultats = {}

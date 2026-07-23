@@ -20,7 +20,7 @@ import plotly.graph_objects as go
 from style import (
     appliquer_style, carte_kpi, badge_html, COULEURS_STATUT, COULEURS_DELTA,
     COULEUR_CARTE, COULEUR_CARTE_BORDURE, COULEUR_TEXTE, COULEUR_TEXTE_SECONDAIRE,
-    titre_page, section_eyebrow, groupe_titre, MOIS_FR, MOIS_ABREGE_FR,
+    titre_page, selecteur_mois, section_eyebrow, groupe_titre, MOIS_FR, MOIS_ABREGE_FR,
     formater_mois, formater_mois_n1,
 )
 from sidebar import construire_sidebar
@@ -33,20 +33,8 @@ construire_sidebar("service")
 
 df = charger_donnees_service()
 
-# --- SÉLECTEUR DE MOIS (identique à Business) ---
-mois_disponibles = sorted(df["Mois"].dropna().unique(), reverse=True)
-mois_disponibles = [pd.Timestamp(m) for m in mois_disponibles]
-options_mois = {formater_mois(m): m for m in mois_disponibles}
-
-col_titre, col_selecteur = st.columns([5, 1])
-with col_titre:
-    titre_page("Service")
-with col_selecteur:
-    st.write("")
-    mois_choisi_label = st.selectbox(
-        "Mois", options=list(options_mois.keys()), index=0, label_visibility="collapsed"
-    )
-mois_selectionne = options_mois[mois_choisi_label]
+# --- SÉLECTEUR DE MOIS (persistant entre les pages via st.session_state) ---
+mois_selectionne = selecteur_mois(df, "Service")
 
 resultats = calculer_kpi_service(df, mois=mois_selectionne)
 mois_actuel = resultats["mois"]
@@ -55,9 +43,11 @@ mix_canaux = resultats["mix_canaux"]
 
 
 def texte_seuil(nom_kpi: str, unite: str = "") -> str:
-    """Construit le texte du badge à partir du vrai seuil (ex: 'Objectif : < 300s')."""
+    """Construit le texte du badge à partir du vrai seuil (ex: 'Objectif : ≤ 300s').
+    Toujours en <= ou >= (jamais < ou >), cohérent avec la logique inclusive
+    de statut_seuil_fixe() (max -> valeur <= seuil, min -> valeur >= seuil)."""
     sens, seuil = SEUILS_FIXES[nom_kpi]
-    symbole = "<" if sens == "max" else "≥"
+    symbole = "≤" if sens == "max" else "≥"
     return f"Objectif : {symbole} {seuil:g}{unite}"
 
 
@@ -200,7 +190,7 @@ groupe_titre("Répartition & satisfaction")
 col1, col2, col3 = st.columns(3)
 
 COULEURS_CANAUX = {
-    "% Comptoir": "#a1a1aa",
+    "% Comptoir": "#fb923c",
     "% Drive": "#818cf8",
     "% LAD": "#34d399",
     "% Click & Collect": "#eab308",
@@ -370,7 +360,7 @@ with col1:
         annotation_font=dict(size=11, color="#eab308"),
     )
     fig.update_layout(
-        title=dict(text="Big forced (%) — objectif < 20%", x=0.02, xanchor="left", font=dict(size=14, color=COULEUR_TEXTE)),
+        title=dict(text="Big forced (%) — objectif ≤ 20%", x=0.02, xanchor="left", font=dict(size=14, color=COULEUR_TEXTE)),
         template="plotly_dark",
         paper_bgcolor=COULEUR_CARTE,
         plot_bgcolor=COULEUR_CARTE,

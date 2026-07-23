@@ -17,7 +17,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from style import appliquer_style, carte_kpi, badge_html, COULEURS_STATUT, COULEURS_DELTA, COULEUR_CARTE, COULEUR_CARTE_BORDURE, COULEUR_TEXTE, COULEUR_TEXTE_SECONDAIRE, titre_page, section_eyebrow, groupe_titre
+from style import appliquer_style, carte_kpi, badge_html, COULEURS_STATUT, COULEURS_DELTA, COULEUR_CARTE, COULEUR_CARTE_BORDURE, COULEUR_TEXTE, COULEUR_TEXTE_SECONDAIRE, titre_page, selecteur_mois, section_eyebrow, groupe_titre
 from sidebar import construire_sidebar
 from src.kpi.business import charger_donnees_business, calculer_kpi_business, calculer_serie_annuelle, SEUILS_FIXES
 
@@ -47,20 +47,8 @@ def formater_mois(ts: pd.Timestamp) -> str:
     return f"{MOIS_FR[ts.month - 1]} {ts.year}"
 
 
-# Sélecteur de mois : liste des mois archivés, du plus récent au plus ancien
-mois_disponibles = sorted(df["Mois"].dropna().unique(), reverse=True)
-mois_disponibles = [pd.Timestamp(m) for m in mois_disponibles]
-options_mois = {formater_mois(m): m for m in mois_disponibles}
-
-col_titre, col_selecteur = st.columns([5, 1])
-with col_titre:
-    titre_page("Business")
-with col_selecteur:
-    st.write("")  # petit espace pour aligner verticalement avec le titre
-    mois_choisi_label = st.selectbox(
-        "Mois", options=list(options_mois.keys()), index=0, label_visibility="collapsed"
-    )
-mois_selectionne = options_mois[mois_choisi_label]
+# --- SÉLECTEUR DE MOIS (persistant entre les pages via st.session_state) ---
+mois_selectionne = selecteur_mois(df, "Business")
 
 resultats = calculer_kpi_business(df, mois=mois_selectionne)
 mois_actuel = resultats["mois"]
@@ -70,11 +58,13 @@ kpi = resultats["kpi"]
 def texte_seuil(nom_kpi: str) -> tuple[str, str]:
     """
     Construit le texte du badge à partir du VRAI seuil du KPI
-    (ex: "≥ 75%", "< 20.5%"), plutôt qu'un texte générique
-    "Dans l'objectif" / "Hors objectif".
+    (ex: "≤ 75%", "≥ 20.5%"), plutôt qu'un texte générique
+    "Dans l'objectif" / "Hors objectif". Toujours en <= ou >=
+    (jamais < ou >), cohérent avec la logique inclusive de
+    statut_seuil_fixe() (max -> valeur <= seuil, min -> valeur >= seuil).
     """
     sens, seuil = SEUILS_FIXES[nom_kpi]
-    symbole = "<" if sens == "max" else "≥"
+    symbole = "≤" if sens == "max" else "≥"
     # :g retire les zéros inutiles (75.0 -> "75", 0.70 -> "0.7")
     return f"Objectif : {symbole} {seuil:g}%"
 
