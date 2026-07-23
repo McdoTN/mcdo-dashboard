@@ -1,133 +1,139 @@
 """
 src/kpi/qualite.py
 
-Calcul des KPI du pôle Qualité / Sécurité Alimentaire à partir des
-données DATA_Qualite.
-
-Ce pôle fonctionne différemment des autres :
-- Pas de vue "mois courant" : les 3 taux (Audit interne, Audit Siliker,
-  Taux de prélèvement) sont MOYENNÉS sur l'année, en ignorant les mois
-  sans donnée (mois vides = normal, pas une erreur)
-- Les 14 items de prélèvement bactériologique contiennent des codes
-  alphanumériques (Z/U/T), pas des nombres — jamais de clean_numeric_columns
-  dessus. Une cellule peut contenir plusieurs codes (ex: "3Z 1U")
-- "Taux de prélèvement" est déjà calculé côté Google Sheets (colonne dédiée),
-  on le lit tel quel, sans le recalculer à partir des items
+Calcul des KPI du pôle Qualité / Sécurité Alimentaire à partir des données
+DATA_Qualité. Seule page du dashboard organisée par ANNÉE (pas de mois) :
+audits interne/Siliker mois par mois + agrégat annuel, prélèvements
+bactériologiques (codes Z/U/T par item et par mois — le taux annuel est
+pris DIRECTEMENT depuis la colonne "Taux de prélèvement" déjà saisie dans
+le Sheet, pas recalculé à partir des codes — décision de Bastien).
 """
 
+import datetime
 import pandas as pd
 from src.gspread.connection import load_data_tab
-from src.kpi.utils import clean_numeric_columns, statut_seuil_fixe, parse_codes_bacterio
+from src.kpi.utils import clean_numeric_columns, statut_seuil_fixe
 
-# Les 3 taux du pôle, avec leur objectif propre — tous sens "min"
-# (vert si au-dessus du seuil)
-SEUILS_TAUX = {
-    "Audit interne": ("min", 90),
-    "Audit Siliker": ("min", 98),
-    "Taux de prélèvement": ("min", 98),
-}
+# Les 3 indicateurs numériques (%) du pôle
+COLONNES_NUMERIQUES = ["Audit interne", "Audit Siliker", "Taux de prélèvement"]
 
-# Les 14 items de prélèvement bactériologique — codes alphanumériques,
-# ne JAMAIS passer dans clean_numeric_columns()
+# Les 14 items de prélèvement bactériologique (codes Z/U/T — PAS
+# numériques, ne pas les passer à clean_numeric_columns ; parsés seulement
+# à l'affichage, dans la page)
 ITEMS_PRELEVEMENT = [
     "Chantilly", "Sundae", "Shake", "Salade", "Surfaces", "Glaçons",
     "Coupe-tomates", "Mains", "Eau", "Sandwich", "Gâteau",
     "Boissons chaudes", "Re-use", "Boissons froides",
 ]
 
+# Libellés courts pour les en-têtes du tableau (14 colonnes = ne rentre
+# pas en entier, comme sur la maquette)
+LIBELLES_COURTS_ITEMS = {
+    "Chantilly": "Chantilly",
+    "Sundae": "Sundae",
+    "Shake": "Shake",
+    "Salade": "Salade",
+    "Surfaces": "Surfaces",
+    "Glaçons": "Glaçons",
+    "Coupe-tomates": "C.-tomates",
+    "Mains": "Mains",
+    "Eau": "Eau",
+    "Sandwich": "Sandwich",
+    "Gâteau": "Gâteau",
+    "Boissons chaudes": "B. chaudes",
+    "Re-use": "Re-use",
+    "Boissons froides": "B. froides",
+}
+
+SEUILS_FIXES = {
+    "Audit interne": ("min", 90),        # %
+    "Audit Siliker": ("min", 98),        # %, 4x/an
+    "Taux de prélèvement": ("min", 98),  # %
+}
+
 
 def charger_donnees_qualite() -> pd.DataFrame:
-    """
-    Charge et nettoie les données du pôle Qualité. Seuls les 3 taux
-    (Audit interne, Audit Siliker, Taux de prélèvement) sont convertis
-    en numérique — les 14 items de prélèvement restent en texte brut,
-    pour être parsés ensuite via parse_codes_bacterio().
-    """
+    """Charge et nettoie les données du pôle Qualité. Seules les 3
+    colonnes d'indicateurs numériques sont converties en float — les 14
+    colonnes de prélèvement restent en texte brut (codes Z/U/T)."""
     df = load_data_tab("DATA_Qualité")
-    df = clean_numeric_columns(df, list(SEUILS_TAUX.keys()))
+    df = clean_numeric_columns(df, COLONNES_NUMERIQUES)
     return df
 
 
-def calculer_moyennes_annuelles(df: pd.DataFrame, annee: int) -> dict:
+def _construire_table_audit(df: pd.DataFrame, colonne: str, annee: int) -> dict:
     """
-    Calcule, pour une année donnée, la moyenne de chacun des 3 taux
-    (Audit interne, Audit Siliker, Taux de prélèvement), en ignorant
-    les mois sans donnée (cas normal : audit Siliker 4x/an seulement,
-    par exemple).
+    Détail mois par mois d'un indicateur d'audit (Audit interne ou Audit
+    Siliker) pour une année donnée, + agrégat annuel (moyenne des mois
+    renseignés).
 
-    Returns:
-        dict structuré ainsi :
-        {
-            "Audit interne": {"valeur": 90.5, "statut": "vert"},
-            "Audit Siliker": {"valeur": 98.5, "statut": "vert"},
-            "Taux de prélèvement": {"valeur": 93.3, "statut": "rouge"},
-        }
-        "valeur" est None et "statut" est "non disponible" si aucun mois
-        de l'année n'a de donnée pour ce taux.
+    Un mois SANS donnée est marqué "Pas d'audit" s'il est déjà passé, ou
+    "À venir" sinon — comparé à la date réelle d'aujourd'hui, puisque
+    cette page n'a pas de sélecteur de mois pour servir de référence.
     """
+    sens, seuil_vert = SEUILS_FIXES[colonne]
+    aujourdhui = datetime.date.today()
+
     df_annee = df[df["Mois"].dt.year == annee]
+    valeurs_par_mois = {int(l["Mois"].month): l[colonne] for _, l in df_annee.iterrows()}
 
-    resultats = {}
-    for colonne, (sens, seuil_vert) in SEUILS_TAUX.items():
-        valeurs_valides = df_annee[colonne].dropna()
+    lignes = []
+    for m in range(1, 13):
+        valeur = valeurs_par_mois.get(m)
+        mois_est_passe = (annee, m) <= (aujourdhui.year, aujourdhui.month)
 
-        if valeurs_valides.empty:
-            resultats[colonne] = {"valeur": None, "statut": "non disponible"}
-            continue
+        if pd.notna(valeur):
+            statut = statut_seuil_fixe(valeur, sens, seuil_vert)
+            resultat = "Conforme" if statut == "vert" else "Hors objectif"
+        else:
+            valeur = None
+            statut = "neutre"
+            resultat = "Pas d'audit" if mois_est_passe else "À venir"
 
-        moyenne = valeurs_valides.mean()
-        resultats[colonne] = {
-            "valeur": moyenne,
-            "statut": statut_seuil_fixe(moyenne, sens, seuil_vert),
-        }
+        lignes.append({"mois": m, "valeur": valeur, "statut": statut, "resultat": resultat})
 
-    return resultats
+    valeurs_valides = [l["valeur"] for l in lignes if l["valeur"] is not None]
+    valeur_annuelle = round(sum(valeurs_valides) / len(valeurs_valides), 1) if valeurs_valides else None
+    statut_annuel = statut_seuil_fixe(valeur_annuelle, sens, seuil_vert) if valeur_annuelle is not None else "non disponible"
+
+    return {"lignes": lignes, "valeur_annuelle": valeur_annuelle, "statut_annuel": statut_annuel}
 
 
-def construire_tableau_prelevements(df: pd.DataFrame, annee: int) -> dict:
+def calculer_kpi_qualite(df: pd.DataFrame, annee: int) -> dict:
     """
-    Construit le gros tableau de prélèvements bactériologiques (mois x item)
-    pour une année donnée, avec les codes déjà parsés.
-
-    Returns:
-        dict {Timestamp du mois: {item: [(nombre, lettre), ...]}}
-        Chaque mois de l'année apparaît, même sans aucun prélèvement
-        (liste vide pour tous les items ce mois-là — cas normal).
-        Un item peut avoir plusieurs résultats dans le même mois
-        (ex: [(3, "Z"), (1, "U")] pour une cellule "3Z 1U").
+    Calcule les 3 indicateurs du pôle pour une année donnée :
+    - audit_interne / audit_siliker : détail mensuel + agrégat annuel
+    - prelevement : agrégat annuel = moyenne de la colonne "Taux de
+      prélèvement" déjà saisie (PAS un recalcul à partir des codes Z/U/T
+      des 14 items — décision de Bastien, le sujet était "à confirmer
+      avec Arnaud" dans les notes de mémoire, c'est réglé)
     """
-    df_annee = df[df["Mois"].dt.year == annee].sort_values("Mois")
+    audit_interne = _construire_table_audit(df, "Audit interne", annee)
+    audit_siliker = _construire_table_audit(df, "Audit Siliker", annee)
 
-    tableau = {}
-    for _, ligne in df_annee.iterrows():
-        tableau[ligne["Mois"]] = {
-            item: parse_codes_bacterio(ligne[item]) for item in ITEMS_PRELEVEMENT
-        }
+    sens, seuil_vert = SEUILS_FIXES["Taux de prélèvement"]
+    df_annee = df[df["Mois"].dt.year == annee]
+    valeurs_prelevement = df_annee["Taux de prélèvement"].dropna()
+    valeur_prelevement = round(valeurs_prelevement.mean(), 1) if not valeurs_prelevement.empty else None
+    statut_prelevement = (
+        statut_seuil_fixe(valeur_prelevement, sens, seuil_vert) if valeur_prelevement is not None else "non disponible"
+    )
 
-    return tableau
+    return {
+        "annee": annee,
+        "audit_interne": audit_interne,
+        "audit_siliker": audit_siliker,
+        "prelevement": {"valeur_annuelle": valeur_prelevement, "statut_annuel": statut_prelevement},
+    }
 
 
-def calculer_serie_audits(df: pd.DataFrame, annee: int) -> pd.DataFrame:
+def extraire_table_prelevements(df: pd.DataFrame, annee: int) -> pd.DataFrame:
     """
-    Retourne, pour chaque mois archivé d'une année donnée, les valeurs
-    et statuts d'Audit interne et Audit Siliker — pour le tableau
-    récapitulatif mensuel de fin de page (le seul tableau récap de ce
-    pôle, contrairement aux autres pôles qui en ont un plus complet).
-
-    Un statut "non disponible" pour un mois signifie "Pas d'audit ce
-    mois-là" (cas normal, notamment pour Siliker qui n'a lieu que 4x/an) —
-    à traduire ainsi côté dashboard plutôt que comme une anomalie.
+    Sous-ensemble du DataFrame pour l'année donnée : colonne Mois + les 14
+    items de prélèvement (codes bruts, ex: "1Z", "3Z 1U", ou vide) + la
+    colonne "Taux de prélèvement" (%) du mois, affichée en toute dernière
+    colonne du tableau — alimente le tableau "Prélèvements bactériologiques"
+    de la page.
     """
     df_annee = df[df["Mois"].dt.year == annee].copy()
-    df_annee = df_annee.sort_values("Mois").reset_index(drop=True)
-
-    for colonne in ("Audit interne", "Audit Siliker"):
-        sens, seuil_vert = SEUILS_TAUX[colonne]
-        df_annee[f"{colonne}_statut"] = df_annee[colonne].apply(
-            lambda valeur: statut_seuil_fixe(valeur, sens, seuil_vert)
-        )
-
-    return df_annee[
-        ["Mois", "Audit interne", "Audit interne_statut",
-         "Audit Siliker", "Audit Siliker_statut"]
-    ]
+    return df_annee[["Mois"] + ITEMS_PRELEVEMENT + ["Taux de prélèvement"]]

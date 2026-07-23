@@ -59,6 +59,7 @@ def fleche_delta(valeur_delta) -> str:
 
 # --- KPI DU MOIS ---
 section_eyebrow("KPI du mois")
+groupe_titre("Main d'œuvre et performance")
 
 # Conteneur clé pour forcer les 5 cartes à la même hauteur : MO FDC et
 # MO P&L ont une ligne de delta en plus (vs VPHE/PAC/Turn-Over qui n'en

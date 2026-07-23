@@ -25,7 +25,7 @@ PAGES = [
     {"id": "service", "label": "Service", "icon": ":material/schedule:", "path": "pages/2_Service.py", "couleur": "#38bdf8"},
     {"id": "rh", "label": "RH", "icon": ":material/group:", "path": "pages/3_RH.py", "couleur": "#f472b6"},
     {"id": "polyvalence", "label": "Polyvalence", "icon": ":material/sync:", "path": "pages/4_Polyvalence.py", "couleur": "#34d399"},
-    {"id": "qualite", "label": "Qualité", "icon": ":material/verified_user:", "path": "pages/5_Qualite.py", "couleur": "#a78bfa"},
+    {"id": "qualite", "label": "Qualité", "icon": ":material/verified_user:", "path": "pages/5_Qualite.py", "couleur": "#f87171"},
 ]
 
 # Couleur de fond du surlignage plein-largeur de la page active

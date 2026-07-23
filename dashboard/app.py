@@ -35,8 +35,8 @@ if not st.session_state.get("authentifie", False):
     # impossible d'y accéder même en tapant une URL directement.
     pg = st.navigation([st.Page(page_connexion, title="Connexion")], position="hidden")
 else:
-    # Connecté : la vraie liste de pages apparaît. La future page (Qualité)
-    # viendra s'ajouter ici au fur et à mesure qu'on la construira.
+    # Connecté : la vraie liste de pages apparaît — toutes les pages du
+    # dashboard sont maintenant construites.
     pg = st.navigation(
         [
             st.Page("pages/0_Accueil.py", title="Accueil", icon=":material/dashboard:", default=True),
@@ -44,6 +44,7 @@ else:
             st.Page("pages/2_Service.py", title="Service", icon=":material/schedule:"),
             st.Page("pages/3_RH.py", title="RH", icon=":material/group:"),
             st.Page("pages/4_Polyvalence.py", title="Polyvalence", icon=":material/sync:"),
+            st.Page("pages/5_Qualite.py", title="Qualité", icon=":material/verified_user:"),
         ],
         position="hidden",
     )
