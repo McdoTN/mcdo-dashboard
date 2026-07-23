@@ -1,131 +1,123 @@
 """
 src/kpi/polyvalence.py
 
-Calcul des KPI du pôle Polyvalence à partir des données DATA_Polyvalence.
+Calcul des KPI du pôle Polyvalence à partir des données DATA_POLYVALENCE.
 
-Particularités de ce pôle par rapport aux autres :
-- Un seul objectif (45%), appliqué à la fois au taux global ET à chaque poste
-- "Nombre d'équipiers" est un simple compteur, sans seuil
-- Pas de tableau récapitulatif annuel : seul le taux global a une série
-  mensuelle (pour le graphique d'évolution 2025 vs 2024)
-- Les postes "le + / - maîtrisé" ne sont pas fixes : ils sont déterminés
-  dynamiquement chaque mois en comparant les valeurs de tous les postes
+Un seul seuil pour tout le pôle (45%, sens "min") : il s'applique au taux
+global ET, implicitement, à chacun des 10 postes (code couleur du radar et
+du classement de la page), sans qu'un badge "Objectif : ..." séparé soit
+répété sur chaque poste — validé avec Bastien.
 """
 
 import pandas as pd
 from src.gspread.connection import load_data_tab
 from src.kpi.utils import clean_numeric_columns, statut_seuil_fixe, statut_tendance, calculer_delta
 
-# Colonne du taux global, et liste des 10 postes individuels
-COLONNE_TAUX_GLOBAL = "Taux de polyvalence"
+# Les 10 postes du pôle Polyvalence (noms de postes McDo réels)
 POSTES = [
     "% Frites", "% Salle", "% B/D", "% Verif", "% Pass drive",
     "% PDC", "% Inic", "% UHC", "% Viandes", "% FCN",
 ]
-COLONNE_EFFECTIF = "Nombre d'équipiers"
 
-COLONNES_NUMERIQUES = [COLONNE_TAUX_GLOBAL] + POSTES + [COLONNE_EFFECTIF]
+# Libellés courts affichés sur le dashboard (radar, classement) — sans le
+# préfixe "% ", pour rester lisible sur des petits axes/labels
+LIBELLES_POSTES = {
+    "% Frites": "Frites",
+    "% Salle": "Salle",
+    "% B/D": "B/D",
+    "% Verif": "Verif",
+    "% Pass drive": "Pass Drive",
+    "% PDC": "PDC",
+    "% Inic": "Inic",
+    "% UHC": "UHC",
+    "% Viandes": "Viandes",
+    "% FCN": "FCN",
+}
 
-# Objectif unique, appliqué au taux global et à chaque poste (sens "min" :
-# vert si au-dessus, rouge si en dessous — cf. légende de ta maquette)
-OBJECTIF_POLYVALENCE = 45
+COLONNES_NUMERIQUES = ["Taux de polyvalence"] + POSTES + ["Nombre d'équipiers"]
+
+# Seuil unique pour tout le pôle
+SEUIL_POLYVALENCE = ("min", 45)  # %
 
 
 def charger_donnees_polyvalence() -> pd.DataFrame:
-    """
-    Charge et nettoie les données du pôle Polyvalence : lecture du Sheets
-    puis conversion des colonnes numériques (virgule -> point -> float).
-    """
+    """Charge et nettoie les données du pôle Polyvalence."""
     df = load_data_tab("DATA_Polyvalence")
     df = clean_numeric_columns(df, COLONNES_NUMERIQUES)
     return df
 
 
-def calculer_kpi_polyvalence(df: pd.DataFrame = None) -> dict:
+def calculer_kpi_polyvalence(df: pd.DataFrame = None, mois: pd.Timestamp = None) -> dict:
     """
-    Calcule les KPI Polyvalence pour le mois le plus récent disponible.
+    Calcule les KPI Polyvalence pour un mois donné (ou le plus récent
+    disponible si non précisé).
 
     Returns:
-        dict structuré ainsi :
+        dict :
         {
-            "mois": Timestamp du mois courant,
-            "effectif": 32,  # Nombre d'équipiers, simple valeur
-            "taux_global": {
-                "valeur": 46.1, "statut": "vert",
-                "valeur_n1": 43.7, "delta_n1_points": 2.4,
-                "tendance_n1": "vert"
-            },
-            "postes": {
-                "% Frites": {"valeur": 46, "statut": "vert"},
-                "% Verif": {"valeur": 36, "statut": "rouge"},
-                ...  # un par poste, statut vs le même objectif 45%
-            },
-            "poste_plus_maitrise": {"nom": "% PDC", "valeur": 56, "statut": "vert"},
-            "poste_moins_maitrise": {"nom": "% Verif", "valeur": 36, "statut": "rouge"},
+            "mois": Timestamp,
+            "taux_global": {"valeur", "statut", "valeur_n1",
+                             "delta_n1_points", "tendance_n1"},
+            "postes": {"% Frites": {"valeur", "statut"}, ...},
+            "nombre_equipiers": valeur brute (informatif, pas de statut),
+            "poste_mieux_maitrise": nom de colonne (ex: "% Frites") ou None,
+            "poste_moins_maitrise": nom de colonne ou None,
         }
     """
     if df is None:
         df = charger_donnees_polyvalence()
 
-    mois_actuel = df["Mois"].max()
+    mois_actuel = mois if mois is not None else df["Mois"].max()
     ligne_actuelle = df[df["Mois"] == mois_actuel].iloc[0]
 
-    # Taux global : seuil + delta N-1 + tendance, comme les autres pôles
-    valeur_globale = ligne_actuelle[COLONNE_TAUX_GLOBAL]
-    delta = calculer_delta(df, COLONNE_TAUX_GLOBAL, mois_actuel, pd.DateOffset(years=1))
+    sens, seuil_vert = SEUIL_POLYVALENCE
+
+    valeur_globale = ligne_actuelle["Taux de polyvalence"]
+    delta = calculer_delta(df, "Taux de polyvalence", mois_actuel, pd.DateOffset(years=1))
     delta_points = delta["delta_points"] if delta else None
     taux_global = {
         "valeur": valeur_globale,
-        "statut": statut_seuil_fixe(valeur_globale, "min", OBJECTIF_POLYVALENCE),
+        "statut": statut_seuil_fixe(valeur_globale, sens, seuil_vert),
         "valeur_n1": delta["valeur_reference"] if delta else None,
         "delta_n1_points": delta_points,
-        "tendance_n1": statut_tendance(delta_points, "min"),
+        "tendance_n1": statut_tendance(delta_points, sens),
     }
 
-    # Chaque poste comparé au même objectif de 45%
     postes = {}
     for colonne in POSTES:
         valeur = ligne_actuelle[colonne]
         postes[colonne] = {
             "valeur": valeur,
-            "statut": statut_seuil_fixe(valeur, "min", OBJECTIF_POLYVALENCE),
+            "statut": statut_seuil_fixe(valeur, sens, seuil_vert),
         }
 
-    # Poste le + / - maîtrisé du mois : déterminés dynamiquement,
-    # pas de poste fixe (contrairement à ce qu'une maquette d'exemple
-    # pourrait laisser penser)
-    postes_valides = {
-        nom: data for nom, data in postes.items() if pd.notna(data["valeur"])
-    }
-    nom_poste_plus = max(postes_valides, key=lambda nom: postes_valides[nom]["valeur"])
-    nom_poste_moins = min(postes_valides, key=lambda nom: postes_valides[nom]["valeur"])
-
-    poste_plus_maitrise = {"nom": nom_poste_plus, **postes_valides[nom_poste_plus]}
-    poste_moins_maitrise = {"nom": nom_poste_moins, **postes_valides[nom_poste_moins]}
+    # Poste le mieux / le moins maîtrisé du mois (on ignore les postes sans
+    # donnée saisie ce mois-ci)
+    postes_valides = {c: v["valeur"] for c, v in postes.items() if pd.notna(v["valeur"])}
+    poste_mieux_maitrise = max(postes_valides, key=postes_valides.get) if postes_valides else None
+    poste_moins_maitrise = min(postes_valides, key=postes_valides.get) if postes_valides else None
 
     return {
         "mois": mois_actuel,
-        "effectif": ligne_actuelle[COLONNE_EFFECTIF],
         "taux_global": taux_global,
         "postes": postes,
-        "poste_plus_maitrise": poste_plus_maitrise,
+        "nombre_equipiers": ligne_actuelle["Nombre d'équipiers"],
+        "poste_mieux_maitrise": poste_mieux_maitrise,
         "poste_moins_maitrise": poste_moins_maitrise,
     }
 
 
-def calculer_serie_taux_global(df: pd.DataFrame, annee: int) -> pd.DataFrame:
+def calculer_serie_annuelle(df: pd.DataFrame, annee: int) -> pd.DataFrame:
     """
-    Retourne, pour chaque mois archivé d'une année donnée, le taux de
-    polyvalence global et son statut. Alimente uniquement le graphique
-    "Évolution taux global — 2025 vs 2024" (appelé une fois par année
-    à superposer). Contrairement aux autres pôles, il n'y a pas de série
-    par poste ni de tableau récapitulatif annuel pour ce pôle.
+    Série annuelle du TAUX GLOBAL uniquement (les 10 postes n'ont pas de
+    graphique d'évolution sur cette page — ils sont montrés sur le mois
+    sélectionné uniquement, via le radar et le classement).
     """
-    df_annee = df[df["Mois"].dt.year == annee][["Mois", COLONNE_TAUX_GLOBAL]].copy()
+    df_annee = df[df["Mois"].dt.year == annee].copy()
     df_annee = df_annee.sort_values("Mois").reset_index(drop=True)
 
-    df_annee[f"{COLONNE_TAUX_GLOBAL}_statut"] = df_annee[COLONNE_TAUX_GLOBAL].apply(
-        lambda valeur: statut_seuil_fixe(valeur, "min", OBJECTIF_POLYVALENCE)
+    sens, seuil_vert = SEUIL_POLYVALENCE
+    df_annee["Taux de polyvalence_statut"] = df_annee["Taux de polyvalence"].apply(
+        lambda v: statut_seuil_fixe(v, sens, seuil_vert)
     )
-
     return df_annee
