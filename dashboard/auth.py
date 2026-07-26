@@ -42,7 +42,14 @@ def verifier_mot_de_passe():
     if st.button("Se connecter"):
         if mot_de_passe_saisi == st.secrets["app_password"]:
             st.session_state["authentifie"] = True
-            st.rerun()
+            # st.switch_page() plutôt que st.rerun() : on demande
+            # explicitement à Streamlit de NAVIGUER vers la page d'accueil,
+            # exactement comme si on avait cliqué sur son lien dans la
+            # sidebar. C'est ce mécanisme de navigation (et pas un simple
+            # rerun du script en place) qui fait que l'élément est
+            # remonté à neuf côté navigateur — condition nécessaire pour
+            # que l'animation de fondu en CSS se rejoue.
+            st.switch_page("pages/0_Accueil.py")
         else:
             st.error("Mot de passe incorrect.")
 

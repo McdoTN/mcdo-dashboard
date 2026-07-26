@@ -16,6 +16,8 @@ par page, pas de surlignage pleine largeur).
 import streamlit as st
 from pathlib import Path
 
+from src.gspread.connection import refresh_data
+
 # Une entrée par page : id (utilisé pour savoir quelle page est active),
 # libellé affiché, icône, chemin du fichier (relatif à app.py, comme
 # attendu par st.page_link), et couleur de surlignage propre au pôle.
@@ -99,6 +101,51 @@ def construire_sidebar(page_active: str):
         '[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {'
         '    gap: 0.15rem !important;'
         '}'
+        # La technique flex + margin-top:auto ne marchait pas de façon
+        # fiable (chaîne de conteneurs internes de Streamlit trop
+        # imprévisible). On passe plutôt en positionnement absolu : le
+        # bouton est ancré au bas de section[data-testid="stSidebar"]
+        # directement (rendue "position: relative" pour servir de repère).
+        # Il faut aussi forcer sa hauteur à 100vh : sans ça, la section ne
+        # fait que la hauteur de son contenu, donc "bottom" s'ancre au bas
+        # de CETTE boîte plus courte — pas au bas réel de l'écran — d'où
+        # le décalage/espace vide constaté sous le bouton.
+        'section[data-testid="stSidebar"] {'
+        '    position: relative !important;'
+        '    height: 100vh !important;'
+        '}'
+        # Conteneur du bouton de rafraîchissement : ancré en position
+        # absolue au bas de la sidebar (voir position:relative ci-dessus
+        # sur section[data-testid="stSidebar"]), peu importe la hauteur du
+        # contenu au-dessus — plus fiable que le flex + margin-top:auto.
+        '.st-key-bouton_rafraichir_bloc {'
+        '    position: absolute !important;'
+        '    bottom: 16px !important;'
+        '    left: 20px !important;'
+        '    right: 20px !important;'
+        # Sans ça, un width:100% probablement posé par Streamlit (à cause
+        # de use_container_width=True sur le bouton) entrait en conflit
+        # avec left+right : le navigateur privilégie alors left+width et
+        # ignore right, ce qui étalait la boîte 20px de trop vers la
+        # droite (d'où le décalage/rognage constaté).
+        '    width: auto !important;'
+        '    box-sizing: border-box !important;'
+        '    padding-top: 12px;'
+        '    border-top: 1px solid #323238;'
+        '}'
+        # Le bouton lui-même : reprend le style sombre bordé des cartes
+        # plutôt que le style par défaut de Streamlit (fond plein), pour
+        # rester cohérent avec le reste du dashboard.
+        '.st-key-bouton_rafraichir_bloc button {'
+        '    background-color: #262624 !important;'
+        '    border: 1px solid #3f3f46 !important;'
+        '    border-radius: 8px !important;'
+        '    color: #e4e4e7 !important;'
+        '}'
+        '.st-key-bouton_rafraichir_bloc button:hover {'
+        '    border-color: #818cf8 !important;'
+        '    color: #818cf8 !important;'
+        '}'
         '</style>',
         unsafe_allow_html=True,
     )
@@ -149,6 +196,12 @@ def construire_sidebar(page_active: str):
                     f'    padding-bottom: 10px !important;'
                     f'    width: 100% !important;'
                     f'}}'
+                    # Au survol : texte + icône passent en bleu (même bleu
+                    # que le hover du bouton "Rafraîchir"), sur tous les
+                    # onglets — y compris celui déjà actif.
+                    f'.st-key-nav_{page["id"]}:hover [data-testid="stPageLink"] * {{'
+                    f'    color: #818cf8 !important;'
+                    f'}}'
                     f'</style>',
                     unsafe_allow_html=True,
                 )
@@ -170,3 +223,13 @@ def construire_sidebar(page_active: str):
                     f'}}</style>',
                     unsafe_allow_html=True,
                 )
+
+        # --- Bouton de rafraîchissement manuel (collé en bas de la sidebar,
+        # sur toutes les pages) : vide le cache de load_data_tab (TTL 24h)
+        # pour que le directeur puisse forcer une mise à jour immédiate
+        # juste après sa saisie mensuelle dans le Google Sheets, sans
+        # attendre le lendemain que le cache expire tout seul.
+        with st.container(key="bouton_rafraichir_bloc"):
+            if st.button(":material/refresh: Rafraîchir", key="bouton_rafraichir", use_container_width=True):
+                refresh_data()
+                st.rerun()

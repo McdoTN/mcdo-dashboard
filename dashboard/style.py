@@ -105,8 +105,14 @@ def appliquer_style():
             font-size: 13px;
             font-weight: 600;
         }}
+        @keyframes fondu_page {{
+            from {{ opacity: 0; }}
+            to {{ opacity: 1; }}
+        }}
         .block-container {{
             padding-top: 2.5rem;
+            padding-bottom: 0.5rem;
+            animation: fondu_page 1s ease-in;
         }}
         .page-titre {{
             color: {COULEUR_TEXTE};
