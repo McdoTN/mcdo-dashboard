@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Ping dashboard
         run: |
-          curl -sL -o /dev/null -w "Code HTTP : %{http_code}\n" https://mcdo-dashboard-tn.streamlit.app/
+          curl -sL -b "" -o /dev/null -w "Code HTTP : %{http_code}\n" https://mcdo-dashboard-tn.streamlit.app/
