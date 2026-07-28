@@ -26,7 +26,6 @@ mcdo-dashboard/
 ├── dashboard/
 │   ├── pages/             # pages du dashboard Streamlit (une par pôle)
 │   └── app.py             # point d'entrée de l'application
-├── docs/                  # documentation technique (structure du Sheets, définitions des KPI, seuils)
 ├── .gitignore
 ├── requirements.txt
 └── README.md
@@ -56,13 +55,13 @@ streamlit run dashboard/app.py
 
 Le tableau de bord est déployé sur **Streamlit Community Cloud**, gratuitement, sans serveur dédié. L'accès est protégé par authentification.
 
-Streamlit Community Cloud met en veille les applications inactives après 7 jours. Un service de supervision externe visite régulièrement l'URL du dashboard pour le maintenir actif (détails dans le guide de passation).
+Streamlit Community Cloud met en veille les applications inactives après 7 jours. Un workflow GitHub Actions intégré au dépôt (`.github/workflows/keep-alive.yml`) visite chaque jour l'URL du dashboard pour le maintenir actif (détails dans le guide de passation).
 
 Les données lues depuis Google Sheets sont mises en cache 24h pour limiter les appels à l'API. Un bouton de rafraîchissement manuel permet de forcer la mise à jour après la saisie mensuelle.
 
 ## KPI suivis
 
-Quatre pôles : **Business** (CA, TAC, QCR, marges, pertes...), **Service** (temps de service, canaux de commande, satisfaction), **Ressources humaines** (masse salariale, turn-over, VPHE), **Qualité et sécurité alimentaire** (audits, analyses bactériologiques). Le détail des définitions, seuils et règles de calcul est disponible dans `docs/` et dans le mémoire associé au projet (chapitre 2).
+Quatre pôles : **Business** (CA, TAC, QCR, marges, pertes...), **Service** (temps de service, canaux de commande, satisfaction), **Ressources humaines** (masse salariale, turn-over, VPHE), **Qualité et sécurité alimentaire** (audits, analyses bactériologiques). 
 
 ## Maintenance
 
