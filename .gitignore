@@ -195,9 +195,9 @@ cython_debug/
 .abstra/
 
 # Visual Studio Code
-#   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore 
+#   Visual Studio Code specific template is maintained in a separate VisualStudioCode.gitignore
 #   that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
-#   and can be added to the global gitignore or merged into this file. However, if you prefer, 
+#   and can be added to the global gitignore or merged into this file. However, if you prefer,
 #   you could uncomment the following to ignore the entire vscode folder
 # .vscode/
 # Temporary file for partial code execution
@@ -214,19 +214,26 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-# Streamlit
+# Streamlit — secrets, JAMAIS commit
 .streamlit/secrets.toml
 
-# Secrets Streamlit — JAMAIS commit
-.streamlit/secrets.toml
-
-# Credentials Google (si jamais un fichier JSON traîne en local)
+# Credentials Google (si jamais un fichier JSON traine en local)
 *.json
 !package.json
 
-# Données locales temporaires
+# Donnees locales temporaires
 data/*
 !data/.gitkeep
+
+# Sorties generees par les scripts d'analyse (pole predictif, KPI, exports
+# dashboard...) : graphiques et tableaux contenant de VRAIES donnees du
+# restaurant (CA, marges, effectifs...). A ne jamais commit, meme hors
+# du dossier data/. Le code qui les genere reste versionne, pas leur resultat.
+*.png
+*.csv
+*.xlsx
+/exports/
+/output/
 
 # Fichiers OS
 .DS_Store
