@@ -10,4 +10,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping dashboard
-        run: curl -sL -o /dev/null -w "Code HTTP : %{http_code}\n" https://mcdo-dashboard-tn.streamlit.app/
+        run: |
+          curl -sL -o /dev/null -w "Code HTTP : %{http_code}\n" https://mcdo-dashboard-tn.streamlit.app/
