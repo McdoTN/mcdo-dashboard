@@ -1,0 +1,13 @@
+name: Keep dashboard alive
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping dashboard
+        run: curl -sL -o /dev/null -w "Code HTTP : %{http_code}\n" https://mcdo-dashboard-tn.streamlit.app/
